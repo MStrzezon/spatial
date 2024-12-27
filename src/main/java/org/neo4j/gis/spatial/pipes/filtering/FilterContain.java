@@ -42,8 +42,8 @@ public class FilterContain extends AbstractFilterGeoPipe {
 	protected boolean validate(GeoPipeFlow flow) {
 		// check if every point of the other geometry is a point of this geometry,
 		// and the interiors of the two geometries have at least one point in common
-		return flow.getEnvelope().contains(otherEnvelope)
-				&& flow.getGeometry().contains(other);
+		return otherEnvelope.contains(flow.getEnvelope())
+				&& other.contains(flow.getGeometry());
 	}
 
 }

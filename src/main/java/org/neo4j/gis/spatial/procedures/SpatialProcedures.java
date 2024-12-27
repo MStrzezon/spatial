@@ -821,6 +821,30 @@ public class SpatialProcedures extends SpatialApiBase {
 				.stream().map(GeoPipeFlow::getGeomNode).map(NodeResult::new);
 	}
 
+	@Procedure(value = "spatial.contains", mode = WRITE)
+	@Description("Returns all geometry nodes that are contained by the given geometry (shape, polygon) in the layer")
+	public Stream<NodeResult> findGeometriesContainedBy(
+			@Name("layerName") String name,
+			@Name("geometry") Object geometry) {
+
+		Layer layer = getLayerOrThrow(tx, spatial(), name);
+		return GeoPipeline
+				.startContainSearch(tx, layer, toJTSGeometry(layer, geometry))
+				.stream().map(GeoPipeFlow::getGeomNode).map(NodeResult::new);
+	}
+
+	@Procedure(value = "spatial.touches", mode = WRITE)
+	@Description("Returns all geometry nodes that touch the given geometry (shape, polygon) in the layer")
+	public Stream<NodeResult> findGeometriesTouching(
+			@Name("layerName") String name,
+			@Name("geometry") Object geometry) {
+
+		Layer layer = getLayerOrThrow(tx, spatial(), name);
+		return GeoPipeline
+				.startTouchSearch(tx, layer, toJTSGeometry(layer, geometry))
+				.stream().map(GeoPipeFlow::getGeomNode).map(NodeResult::new);
+	}
+
 	private static Geometry toJTSGeometry(Layer layer, Object value) {
 		GeometryFactory factory = layer.getGeometryFactory();
 		if (value instanceof org.neo4j.graphdb.spatial.Point point) {
