@@ -19,6 +19,8 @@
  */
 package org.neo4j.gis.spatial.pipes;
 
+import static org.neo4j.gis.spatial.pipes.impl.FilterPipe.Filter.LESS_THAN_EQUAL;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -64,6 +66,7 @@ import org.neo4j.gis.spatial.pipes.filtering.FilterTouch;
 import org.neo4j.gis.spatial.pipes.filtering.FilterValid;
 import org.neo4j.gis.spatial.pipes.filtering.FilterWithin;
 import org.neo4j.gis.spatial.pipes.impl.FilterPipe;
+import org.neo4j.gis.spatial.pipes.impl.FilterPipe.Filter;
 import org.neo4j.gis.spatial.pipes.impl.IdentityPipe;
 import org.neo4j.gis.spatial.pipes.impl.Pipe;
 import org.neo4j.gis.spatial.pipes.impl.Pipeline;
@@ -72,6 +75,7 @@ import org.neo4j.gis.spatial.pipes.processing.ApplyAffineTransformation;
 import org.neo4j.gis.spatial.pipes.processing.Area;
 import org.neo4j.gis.spatial.pipes.processing.Boundary;
 import org.neo4j.gis.spatial.pipes.processing.Buffer;
+import org.neo4j.gis.spatial.pipes.processing.CalculateIntersectionAngle;
 import org.neo4j.gis.spatial.pipes.processing.Centroid;
 import org.neo4j.gis.spatial.pipes.processing.ConvexHull;
 import org.neo4j.gis.spatial.pipes.processing.CopyDatabaseRecordProperties;
@@ -109,6 +113,7 @@ import org.neo4j.gis.spatial.rtree.filter.SearchAll;
 import org.neo4j.gis.spatial.rtree.filter.SearchFilter;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Transaction;
+import org.neo4j.logging.Log;
 
 public class GeoPipeline extends Pipeline<GeoPipeFlow, GeoPipeFlow> {
 
@@ -233,7 +238,12 @@ public class GeoPipeline extends Pipeline<GeoPipeFlow, GeoPipeFlow> {
 	 */
 	public static GeoPipeline startIntersectSearch(final Transaction tx, Layer layer, Geometry geometry) {
 		return startIntersectWindowSearch(tx, layer, geometry.getEnvelopeInternal())
-				.intersectionFilter(geometry);
+				.intersectionFilter(geometry)
+				.calculateIntersectionAngle(geometry);
+	}
+
+	public GeoPipeline calculateIntersectionAngle(Geometry geometry) {
+		return addPipe(new CalculateIntersectionAngle(geometry));
 	}
 
 	/**
@@ -300,7 +310,18 @@ public class GeoPipeline extends Pipeline<GeoPipeFlow, GeoPipeFlow> {
 		GeoPipeline pipeline = start(tx, layer,
 				new SearchIntersectWindow(layer, searchWindow)).calculateOrthodromicDistance(point);
 		return pipeline.propertyFilter(OrthodromicDistance.DISTANCE, maxDistanceInKm,
-				FilterPipe.Filter.LESS_THAN_EQUAL);
+				LESS_THAN_EQUAL);
+	}
+
+	public static GeoPipeline startNearestNeighborLatLonSearch(final Transaction tx, Layer layer, Geometry geometry,
+			double maxDistanceInKm, Log log) {
+		Envelope searchWindow = OrthodromicDistance.suggestSearchWindow(geometry, maxDistanceInKm);
+		GeoPipeline pipeline = start(tx, layer,
+				new SearchIntersectWindow(layer, searchWindow)).calculateOrthodromicDistance(geometry, log);
+		return pipeline.propertyFilter(OrthodromicDistance.DISTANCE, maxDistanceInKm,
+						LESS_THAN_EQUAL)
+				.propertyFilter(OrthodromicDistance.DISTANCE, 0.0,
+						Filter.GREATER_THAN);
 	}
 
 	/**
@@ -348,7 +369,7 @@ public class GeoPipeline extends Pipeline<GeoPipeFlow, GeoPipeFlow> {
 
 		return start(tx, layer, new SearchIntersectWindow(layer, extent))
 				.calculateDistance(layer.getGeometryFactory().createPoint(point))
-				.propertyFilter("Distance", maxDistance, FilterPipe.Filter.LESS_THAN_EQUAL);
+				.propertyFilter("Distance", maxDistance, LESS_THAN_EQUAL);
 	}
 
 	/**
@@ -589,8 +610,13 @@ public class GeoPipeline extends Pipeline<GeoPipeFlow, GeoPipeFlow> {
 	 * @see OrthodromicDistance
 	 */
 	public GeoPipeline calculateOrthodromicDistance(Coordinate reference) {
-		return addPipe(new OrthodromicDistance(reference));
+		return addPipe(new OrthodromicDistance(reference, null));
 	}
+
+	public GeoPipeline calculateOrthodromicDistance(Geometry reference, Log log) {
+		return addPipe(new OrthodromicDistance(reference, log));
+	}
+
 
 	/**
 	 * @see Dimension

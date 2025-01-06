@@ -31,6 +31,7 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.operation.distance.DistanceOp;
 import org.neo4j.gis.spatial.pipes.AbstractGeoPipe;
 import org.neo4j.gis.spatial.pipes.GeoPipeFlow;
+import org.neo4j.logging.Log;
 
 
 /**
@@ -41,35 +42,48 @@ import org.neo4j.gis.spatial.pipes.GeoPipeFlow;
  */
 public class OrthodromicDistance extends AbstractGeoPipe {
 
+	public Log log;
+
 	private final Coordinate reference;
 	public static final double earthRadiusInKm = 6371;
 	public static final String DISTANCE = "OrthodromicDistance";
+	private final Geometry referenceGeometry;
 
-	public OrthodromicDistance(Coordinate reference) {
-		this(reference, OrthodromicDistance.DISTANCE);
+	public OrthodromicDistance(Coordinate reference, Log log) {
+		this(reference, null, OrthodromicDistance.DISTANCE, log);
+	}
+
+	public OrthodromicDistance(Geometry referenceGeometry, Log log) {
+		this(null, referenceGeometry, OrthodromicDistance.DISTANCE, log);
 	}
 
 	/**
 	 * @param resultPropertyName property name to use for geometry output
 	 */
-	public OrthodromicDistance(Coordinate reference, String resultPropertyName) {
+	public OrthodromicDistance(Coordinate reference, Geometry referenceGeometry, String resultPropertyName, Log log) {
 		super(resultPropertyName);
 		this.reference = reference;
+		this.log = log;
+		this.referenceGeometry = referenceGeometry;
 	}
 
 	@Override
 	protected GeoPipeFlow process(GeoPipeFlow flow) {
-		double distanceInKm = calculateDistanceToGeometry(reference, flow.getGeometry());
+		double distanceInKm = calculateDistanceToGeometry(referenceGeometry, flow.getGeometry());
+//		var a = new ProgressLoggingListener("Distance between reference: " + reference + " and point: " + flow.getGeometry()+" distance: "+distanceInKm, log,
+//				Level.INFO);
+//		a.begin(1);
+//		a.worked(2);
+//		a.done();
 		setProperty(flow, distanceInKm);
 		return flow;
 	}
 
-	public static double calculateDistanceToGeometry(Coordinate reference, Geometry geometry) {
+	public static double calculateDistanceToGeometry(Geometry referenceGeometry, Geometry geometry) {
 		if (geometry instanceof Point point) {
-			return calculateDistance(reference, point.getCoordinate());
+			return calculateDistance(referenceGeometry.getCoordinate(), point.getCoordinate());
 		}
-		Geometry referencePoint = geometry.getFactory().createPoint(reference);
-		DistanceOp ops = new DistanceOp(referencePoint, geometry);
+		DistanceOp ops = new DistanceOp(referenceGeometry, geometry);
 		Coordinate[] nearest = ops.nearestPoints();
 		assert nearest.length == 2;
 		return calculateDistance(nearest[0], nearest[1]);
@@ -92,11 +106,31 @@ public class OrthodromicDistance extends AbstractGeoPipe {
 		return new Envelope(minLon, maxLon, minLat, maxLat);
 	}
 
+	public static Envelope suggestSearchWindow(Geometry referenceGeometry, double maxDistanceInKm) {
+		double maxDistanceInMeters = maxDistanceInKm * 1000;
+//		if (referenceGeometry instanceof Point point) {
+//			point.buffer(maxDistanceInMeters);
+//			var reference = point.getCoordinate();
+//			double x = reference.x;
+//			double y = reference.y;
+//
+//			double maxX = x + maxDistanceInMeters;
+//			double minX = x - maxDistanceInMeters;
+//			double maxY = y + maxDistanceInMeters;
+//			double minY = y - maxDistanceInMeters;
+//
+//			return new Envelope(minX, maxX, minY, maxY);
+//		} else if (referenceGeometry instanceof Polygon polygon) {
+//			return polygon.buffer(maxDistanceInMeters).getEnvelopeInternal();
+//		}
+		return referenceGeometry.buffer(maxDistanceInMeters).getEnvelopeInternal();
+	}
+
 	public static double calculateDistance(Coordinate reference, Coordinate point) {
 		String poland2180 = "PROJCS[\"ETRF2000-PL / CS92\",GEOGCS[\"ETRF2000-PL\",DATUM[\"ETRF2000_Poland\",SPHEROID[\"GRS 1980\",6378137,298.257222101],TOWGS84[0,0,0,0,0,0,0]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"9702\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",19],PARAMETER[\"scale_factor\",0.9993],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",-5300000],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AUTHORITY[\"EPSG\",\"2180\"]]";
 		try {
 			CoordinateReferenceSystem crs = CRS.parseWKT(poland2180);
-			return JTS.orthodromicDistance(reference, point, crs);
+			return JTS.orthodromicDistance(reference, point, crs) / 1000.0;
 		} catch (TransformException | FactoryException e) {
 			throw new RuntimeException(e);
 		}

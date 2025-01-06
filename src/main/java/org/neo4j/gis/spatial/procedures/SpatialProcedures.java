@@ -63,6 +63,7 @@ import org.neo4j.gis.spatial.osm.OSMImporter;
 import org.neo4j.gis.spatial.osm.OSMLayer;
 import org.neo4j.gis.spatial.pipes.GeoPipeFlow;
 import org.neo4j.gis.spatial.pipes.GeoPipeline;
+import org.neo4j.gis.spatial.pipes.processing.CalculateIntersectionAngle;
 import org.neo4j.gis.spatial.pipes.processing.OrthodromicDistance;
 import org.neo4j.gis.spatial.rtree.ProgressLoggingListener;
 import org.neo4j.gis.spatial.utilities.SpatialApiBase;
@@ -118,6 +119,10 @@ public class SpatialProcedures extends SpatialApiBase {
 	}
 
 	public record NodeDistanceResult(Node node, double distance) {
+
+	}
+
+	public record NodeAngleResult(Node node, double angle) {
 
 	}
 
@@ -780,8 +785,14 @@ public class SpatialProcedures extends SpatialApiBase {
 			@Name("distanceInKm") double distanceInKm) {
 
 		Layer layer = getLayerOrThrow(tx, spatial(), name);
+//		var a = new ProgressLoggingListener("Finding geometries within distance of " + distanceInKm + " km", log,
+//				Level.INFO);
+//		a.begin(1);
+//		a.worked(2);
+//		a.done();
 		return GeoPipeline
-				.startNearestNeighborLatLonSearch(tx, layer, toCoordinate(coordinate), distanceInKm)
+				.startNearestNeighborLatLonSearch(tx, layer, toJTSGeometry(layer, coordinate),
+						distanceInKm, log)
 				.sort(OrthodromicDistance.DISTANCE)
 				.stream().map(r -> {
 					double distance = r.hasProperty(tx, OrthodromicDistance.DISTANCE) ? ((Number) r.getProperty(tx,
@@ -811,14 +822,19 @@ public class SpatialProcedures extends SpatialApiBase {
 
 	@Procedure(value = "spatial.intersects", mode = WRITE)
 	@Description("Returns all geometry nodes that intersect the given geometry (shape, polygon) in the layer")
-	public Stream<NodeResult> findGeometriesIntersecting(
+	public Stream<NodeAngleResult> findGeometriesIntersecting(
 			@Name("layerName") String name,
 			@Name("geometry") Object geometry) {
 
 		Layer layer = getLayerOrThrow(tx, spatial(), name);
 		return GeoPipeline
 				.startIntersectSearch(tx, layer, toJTSGeometry(layer, geometry))
-				.stream().map(GeoPipeFlow::getGeomNode).map(NodeResult::new);
+				.stream()
+				.filter(r -> r.hasProperty(tx, CalculateIntersectionAngle.ANGLE))
+				.map(r -> {
+					double angle = ((Number) r.getProperty(tx, CalculateIntersectionAngle.ANGLE)).doubleValue();
+					return new NodeAngleResult(r.getGeomNode(), angle);
+				});
 	}
 
 	@Procedure(value = "spatial.contains", mode = WRITE)
