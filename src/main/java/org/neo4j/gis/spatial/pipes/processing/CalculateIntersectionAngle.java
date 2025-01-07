@@ -4,7 +4,6 @@ package org.neo4j.gis.spatial.pipes.processing;
 import org.locationtech.jts.algorithm.Angle;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.LineString;
-import org.locationtech.jts.geom.MultiLineString;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.operation.overlay.OverlayOp;
 import org.locationtech.jts.operation.overlay.snap.SnapIfNeededOverlayOp;
@@ -24,26 +23,30 @@ public class CalculateIntersectionAngle extends AbstractGeoPipe {
 
 	@Override
 	protected GeoPipeFlow process(GeoPipeFlow flow) {
-		if (referenceGeometry instanceof MultiLineString referenceMultiLineString
-				&& flow.getGeometry() instanceof MultiLineString flowMultiLineString) {
-			for (int i = 0; i < flowMultiLineString.getNumGeometries(); i++) {
-				LineString ls1 = (LineString) flowMultiLineString.getGeometryN(i);
-				for (int j = 0; j < referenceMultiLineString.getNumGeometries(); j++) {
-					LineString ls2 = (LineString) referenceMultiLineString.getGeometryN(j);
-					Geometry intersection = SnapIfNeededOverlayOp.overlayOp(ls1, ls2, OverlayOp.INTERSECTION);
+//		if (referenceGeometry instanceof MultiLineString referenceMultiLineString
+//				&& flow.getGeometry() instanceof MultiLineString flowMultiLineString) {
+//			for (int i = 0; i < flowMultiLineString.getNumGeometries(); i++) {
+//				LineString ls1 = (LineString) flowMultiLineString.getGeometryN(i);
+//				for (int j = 0; j < referenceMultiLineString.getNumGeometries(); j++) {
+//					LineString ls2 = (LineString) referenceMultiLineString.getGeometryN(j);
+		LineString ls1 = (LineString) flow.getGeometry();
+		LineString ls2 = (LineString) referenceGeometry;
+		Geometry intersection = SnapIfNeededOverlayOp.overlayOp(ls1, ls2, OverlayOp.INTERSECTION);
 
-					if (!intersection.isEmpty() && intersection instanceof Point intersectionPoint) {
+		if (!intersection.isEmpty() && intersection instanceof Point) {
 
-						double angle = Angle.angleBetweenOriented(ls1.getCoordinate(), intersection.getCoordinate(),
-								ls2.getCoordinate());
-						setProperty(flow, angle);
-						return flow;
-					}
-				}
-			}
-		} else {
-			throw new IllegalArgumentException("Both geometries must be MultiLineString");
+			double angleInRadians = Angle.angleBetweenOriented(ls1.getCoordinate(), intersection.getCoordinate(),
+					ls2.getCoordinate());
+			double angleInDegrees = Math.toDegrees(angleInRadians);
+			angleInDegrees = angleInDegrees < 0 ? -1 * angleInDegrees : angleInDegrees;
+			setProperty(flow, angleInDegrees);
+			return flow;
 		}
+//				}
+//			}
+//		} else {
+//			throw new IllegalArgumentException("Both geometries must be MultiLineString");
+//		}
 		return flow;
 	}
 
