@@ -19,15 +19,9 @@
  */
 package org.neo4j.gis.spatial.pipes.processing;
 
-import org.geotools.api.referencing.FactoryException;
-import org.geotools.api.referencing.crs.CoordinateReferenceSystem;
-import org.geotools.api.referencing.operation.TransformException;
-import org.geotools.geometry.jts.JTS;
-import org.geotools.referencing.CRS;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.operation.distance.DistanceOp;
 import org.neo4j.gis.spatial.pipes.AbstractGeoPipe;
 import org.neo4j.gis.spatial.pipes.GeoPipeFlow;
@@ -80,9 +74,9 @@ public class OrthodromicDistance extends AbstractGeoPipe {
 	}
 
 	public static double calculateDistanceToGeometry(Geometry referenceGeometry, Geometry geometry) {
-		if (geometry instanceof Point point) {
-			return calculateDistance(referenceGeometry.getCoordinate(), point.getCoordinate());
-		}
+//		if (geometry instanceof Point point) {
+//			return calculateDistance(referenceGeometry.getCoordinate(), point.getCoordinate());
+//		}
 		DistanceOp ops = new DistanceOp(referenceGeometry, geometry);
 		Coordinate[] nearest = ops.nearestPoints();
 		assert nearest.length == 2;
@@ -127,13 +121,12 @@ public class OrthodromicDistance extends AbstractGeoPipe {
 	}
 
 	public static double calculateDistance(Coordinate reference, Coordinate point) {
-		String poland2180 = "PROJCS[\"ETRF2000-PL / CS92\",GEOGCS[\"ETRF2000-PL\",DATUM[\"ETRF2000_Poland\",SPHEROID[\"GRS 1980\",6378137,298.257222101],TOWGS84[0,0,0,0,0,0,0]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"9702\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",19],PARAMETER[\"scale_factor\",0.9993],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",-5300000],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AUTHORITY[\"EPSG\",\"2180\"]]";
-		try {
-			CoordinateReferenceSystem crs = CRS.parseWKT(poland2180);
-			return JTS.orthodromicDistance(reference, point, crs) / 1000.0;
-		} catch (TransformException | FactoryException e) {
-			throw new RuntimeException(e);
-		}
+//		String poland2180 = "PROJCS[\"ETRF2000-PL / CS92\",GEOGCS[\"ETRF2000-PL\",DATUM[\"ETRF2000_Poland\",SPHEROID[\"GRS 1980\",6378137,298.257222101],TOWGS84[0,0,0,0,0,0,0]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"9702\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",19],PARAMETER[\"scale_factor\",0.9993],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",-5300000],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AUTHORITY[\"EPSG\",\"2180\"]]";
+		//			CoordinateReferenceSystem crs = CRS.parseWKT(poland2180);
+//			return JTS.orthodromicDistance(reference, point, crs) / 1000.0;
+		double deltaX = reference.x - point.x;
+		double deltaY = reference.y - point.y;
+		return Math.sqrt(deltaX * deltaX + deltaY * deltaY) / 1000;
 	}
 }
 

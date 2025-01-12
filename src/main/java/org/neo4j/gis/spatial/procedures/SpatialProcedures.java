@@ -20,11 +20,13 @@
 package org.neo4j.gis.spatial.procedures;
 
 import static org.neo4j.gis.spatial.SpatialDatabaseService.RTREE_INDEX_NAME;
+import static org.neo4j.graphdb.Label.label;
 import static org.neo4j.procedure.Mode.WRITE;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -70,6 +72,7 @@ import org.neo4j.gis.spatial.utilities.SpatialApiBase;
 import org.neo4j.graphdb.Entity;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.internal.kernel.api.procs.ProcedureSignature;
 import org.neo4j.internal.kernel.api.security.SecurityContext;
@@ -799,6 +802,33 @@ public class SpatialProcedures extends SpatialApiBase {
 							OrthodromicDistance.DISTANCE)).doubleValue() : -1;
 					return new NodeDistanceResult(r.getGeomNode(), distance);
 				});
+	}
+
+	@Procedure(value = "spatial.withinDistanceObjects", mode = WRITE)
+	@Description(
+			"Returns all geometries from the first layer within the distance to the geometries from the second layer if the number of geometries from "
+					+ "the second layer is greater than given threshold")
+	public Stream<NodeResult> findGeometriesWithinDistanceObjects(
+			@Name("layerName") String name,
+			@Name("distanceInKm") double distanceInKm,
+			@Name("threshold") long threshold) {
+		Layer layer = getLayerOrThrow(tx, spatial(), name);
+		ResourceIterator<Node> roads = tx.findNodes(label("Road"));
+		List<NodeResult> results = new ArrayList<>();
+
+		while (roads.hasNext()) {
+			Node node = roads.next();
+			Object coordinate = node.getProperty("wkt");
+			long size = GeoPipeline
+					.startNearestNeighborLatLonSearch(tx, layer, toJTSGeometry(layer, coordinate),
+							distanceInKm, log)
+					.stream()
+					.count();
+			if (size > threshold) {
+				results.add(new NodeResult(node));
+			}
+		}
+		return results.stream();
 	}
 
 	@Deprecated
